@@ -9,3 +9,8 @@ export const getDoctorPatients = async (doctorId) => {
   const response = await apiClient.get(`/doctor/patients?doctor_id=${doctorId}`);
   return response.data;
 };
+
+export const getPatientDetail = async (patientId, doctorId) => {
+  const response = await apiClient.get(`/doctor/patient/${patientId}?doctor_id=${doctorId}`);
+  return response.data;
+};

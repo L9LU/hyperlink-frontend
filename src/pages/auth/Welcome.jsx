@@ -1,4 +1,5 @@
 import AuthLayout from '../../components/AuthLayout.jsx';
+import { Link } from 'react-router-dom';
 
 const Welcome = () => {
   return (
@@ -23,12 +24,18 @@ const Welcome = () => {
         </p>
 
         <div className="space-y-3">
-          <button className="w-full bg-[#0B1739] text-white font-medium py-3 rounded-lg hover:bg-[#0B1739]/90 transition">
+          <Link
+            to="/login"
+            className="block w-full bg-[#0B1739] text-white font-medium py-3 rounded-lg hover:bg-[#0B1739]/90 transition text-center"
+          >
             Sign In
-          </button>
-          <button className="w-full border border-gray-300 text-[#0B1739] font-medium py-3 rounded-lg hover:bg-gray-50 transition">
+          </Link>
+          <Link
+            to="/choose-account-type"
+            className="block w-full border border-gray-300 text-[#0B1739] font-medium py-3 rounded-lg hover:bg-gray-50 transition text-center"
+          >
             Create Account
-          </button>
+          </Link>
         </div>
       </div>
     </AuthLayout>
