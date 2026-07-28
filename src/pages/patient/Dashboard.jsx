@@ -3,13 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { getHistory, getPrediction } from '../../api/records.js';
 import { linkPatient } from '../../api/doctor.js';
+import { updateMeasurements } from '../../api/patient.js';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { Activity, Plus, LogOut, Heart, Shield, UserPlus } from 'lucide-react';
+import { Activity, Plus, LogOut, Heart, Shield, UserPlus, Ruler } from 'lucide-react';
 
 const PatientDashboard = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, login } = useAuth();
   const navigate = useNavigate();
 
   const [readings, setReadings] = useState([]);
@@ -24,6 +25,13 @@ const PatientDashboard = () => {
   const [linkLoading, setLinkLoading] = useState(false);
   const [linkError, setLinkError] = useState('');
   const [linkSuccess, setLinkSuccess] = useState(false);
+
+  // Height/weight prompt — shown when a risk check fails because BMI is missing
+  const [needsMeasurements, setNeedsMeasurements] = useState(false);
+  const [heightCm, setHeightCm] = useState('');
+  const [weightKg, setWeightKg] = useState('');
+  const [measurementsLoading, setMeasurementsLoading] = useState(false);
+  const [measurementsError, setMeasurementsError] = useState('');
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -55,30 +63,81 @@ const PatientDashboard = () => {
     diastolic: r.diastolic,
   }));
 
+  const runRiskCheck = async (patientData) => {
+    const result = await getPrediction({
+      patient_id: patientData.user_id,
+      age: patientData.age,
+      bmi: patientData.bmi,
+      family_history: patientData.family_history,
+      exercise_level: patientData.exercise_level,
+      smoking_status: patientData.smoking_status,
+      bp_history: patientData.bp_history,
+      systolic: latest.systolic,
+      diastolic: latest.diastolic,
+      pulse: latest.pulse,
+    });
+    setRisk(result);
+  };
+
   const handleCheckRisk = async () => {
     setRiskError('');
     setRiskLoading(true);
     try {
-      const result = await getPrediction({
-        patient_id: user.user_id,
-        age: user.age,
-        bmi: user.bmi,
-        family_history: user.family_history,
-        exercise_level: user.exercise_level,
-        smoking_status: user.smoking_status,
-        bp_history: user.bp_history,
-        systolic: latest.systolic,
-        diastolic: latest.diastolic,
-        pulse: latest.pulse,
-      });
-      setRisk(result);
+      await runRiskCheck(user);
     } catch (err) {
       const message =
         err.response?.data?.error ||
         err.response?.data?.message ||
         'Could not calculate risk score.';
-      setRiskError(message);
+
+      // If BMI is the specific problem, prompt for height/weight instead
+      // of just showing a dead-end error message.
+      if (message.toLowerCase().includes('bmi')) {
+        setNeedsMeasurements(true);
+      } else {
+        setRiskError(message);
+      }
     } finally {
+      setRiskLoading(false);
+    }
+  };
+
+  const handleSaveMeasurements = async (e) => {
+    e.preventDefault();
+    setMeasurementsError('');
+
+    if (!heightCm || !weightKg) {
+      setMeasurementsError('Please enter both height and weight.');
+      return;
+    }
+
+    setMeasurementsLoading(true);
+    try {
+      const result = await updateMeasurements({
+        patient_id: user.user_id,
+        height_cm: Number(heightCm),
+        weight_kg: Number(weightKg),
+      });
+
+      // Update local user context so we don't need a fresh login to see the new BMI
+      const updatedUser = { ...user, bmi: result.bmi, height_cm: Number(heightCm), weight_kg: Number(weightKg) };
+      login(updatedUser);
+
+      setNeedsMeasurements(false);
+      setHeightCm('');
+      setWeightKg('');
+
+      // Now retry the risk check with the freshly-saved BMI
+      setRiskLoading(true);
+      await runRiskCheck(updatedUser);
+    } catch (err) {
+      const message =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        'Could not save your measurements. Please try again.';
+      setMeasurementsError(message);
+    } finally {
+      setMeasurementsLoading(false);
       setRiskLoading(false);
     }
   };
@@ -230,7 +289,46 @@ const PatientDashboard = () => {
                 </div>
               )}
 
-              {risk ? (
+              {needsMeasurements ? (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Ruler className="w-4 h-4 text-[#1A56DB]" />
+                    <p className="text-sm font-medium text-[#0B1739]">
+                      We need your height and weight to calculate your risk score.
+                    </p>
+                  </div>
+
+                  {measurementsError && (
+                    <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3 mb-4">
+                      {measurementsError}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleSaveMeasurements} className="flex flex-col sm:flex-row gap-3">
+                    <input
+                      type="number"
+                      value={heightCm}
+                      onChange={(e) => setHeightCm(e.target.value)}
+                      placeholder="Height (cm)"
+                      className="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A56DB]"
+                    />
+                    <input
+                      type="number"
+                      value={weightKg}
+                      onChange={(e) => setWeightKg(e.target.value)}
+                      placeholder="Weight (kg)"
+                      className="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A56DB]"
+                    />
+                    <button
+                      type="submit"
+                      disabled={measurementsLoading}
+                      className="bg-[#0B1739] text-white font-medium px-5 py-2.5 rounded-lg hover:bg-[#0B1739]/90 transition disabled:opacity-60 whitespace-nowrap"
+                    >
+                      {measurementsLoading ? 'Saving...' : 'Save & Check Risk'}
+                    </button>
+                  </form>
+                </div>
+              ) : risk ? (
                 <div>
                   <p className="text-sm text-gray-500 mb-1">Risk Score</p>
                   <p className="text-3xl font-bold text-[#0B1739] mb-2">

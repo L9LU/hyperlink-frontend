@@ -14,6 +14,8 @@ const RegisterPatient = () => {
     phone: '',
     age: '',
     gender: '',
+    heightCm: '',
+    weightKg: '',
     hospital: '',
     password: '',
     confirmPassword: '',
@@ -40,6 +42,13 @@ const RegisterPatient = () => {
       return;
     }
 
+    // Calculate BMI from height/weight if both are provided
+    let bmi = null;
+    if (form.heightCm && form.weightKg) {
+      const heightM = Number(form.heightCm) / 100;
+      bmi = Math.round((Number(form.weightKg) / (heightM * heightM)) * 10) / 10;
+    }
+
     setLoading(true);
     try {
       const response = await registerUser({
@@ -48,6 +57,9 @@ const RegisterPatient = () => {
         phone: form.phone,
         age: form.age,
         gender: form.gender,
+        height_cm: form.heightCm ? Number(form.heightCm) : null,
+        weight_kg: form.weightKg ? Number(form.weightKg) : null,
+        bmi: bmi,
         hospital: form.hospital,
         password: form.password,
         role: 'patient',
@@ -180,6 +192,36 @@ const RegisterPatient = () => {
             </select>
           </div>
         </div>
+
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium text-[#0B1739] mb-1">
+              Height (cm)
+            </label>
+            <input
+              type="number"
+              value={form.heightCm}
+              onChange={handleChange('heightCm')}
+              placeholder="170"
+              className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A56DB]"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[#0B1739] mb-1">
+              Weight (kg)
+            </label>
+            <input
+              type="number"
+              value={form.weightKg}
+              onChange={handleChange('weightKg')}
+              placeholder="68"
+              className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A56DB]"
+            />
+          </div>
+        </div>
+        <p className="text-xs text-gray-400 -mt-2 mb-4">
+          Used to calculate your BMI for risk assessment. You can add this later if you skip it now.
+        </p>
 
         <label className="block text-sm font-medium text-[#0B1739] mb-1">
           Hospital
