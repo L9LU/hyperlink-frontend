@@ -1,13 +1,31 @@
-// Add these to src/api/doctor.js, using the same fetch/axios helper and base URL
-// as your existing getPatientDetail. Example assumes an axios-style `api` instance;
-// adapt to however getPatientDetail is written.
+import apiClient from './client';
+
+export const linkPatient = async (linkData) => {
+  const response = await apiClient.post('/doctor/link-patient', linkData);
+  return response.data;
+};
+
+export const getDoctorPatients = async (doctorId) => {
+  const response = await apiClient.get(`/doctor/patients?doctor_id=${doctorId}`);
+  return response.data;
+};
+
+export const getPatientDetail = async (patientId, doctorId) => {
+  const response = await apiClient.get(`/doctor/patient/${patientId}?doctor_id=${doctorId}`);
+  return response.data;
+};
 
 export const markFollowupDone = async ({ doctor_id, patient_id, note }) => {
-  const res = await api.post('/doctor/followup-done', { doctor_id, patient_id, note });
-  return res.data;
+  const response = await apiClient.post('/doctor/followup-done', { doctor_id, patient_id, note });
+  return response.data;
 };
 
 export const reviewReading = async ({ doctor_id, patient_id, reading_id, outcome }) => {
-  const res = await api.post('/doctor/review-reading', { doctor_id, patient_id, reading_id, outcome });
-  return res.data;
+  const response = await apiClient.post('/doctor/review-reading', {
+    doctor_id,
+    patient_id,
+    reading_id,
+    outcome,
+  });
+  return response.data;
 };
