@@ -157,10 +157,11 @@ const PatientDetail = () => {
   const firstName = (patient?.name || '').split(' ')[0];
   const phone = patient?.phone;
   const wa = waNumber(phone);
-  const waMessage = encodeURIComponent(
-    `Hello ${firstName}, this is ${user?.name ? 'Dr ' + user.name : 'your doctor'} from HyperLink. ` +
-      `I'm checking in on your blood pressure. How are you feeling?`
-  );
+const doctorName = (user?.name || '').replace(/^dr\.?\s+/i, '').trim();
+const waMessage = encodeURIComponent(
+  `Hello ${firstName}, this is ${doctorName ? 'Dr. ' + doctorName : 'your doctor'} from HyperLink. ` +
+    `I'm checking in on your blood pressure. How are you feeling?`
+);
 
   const needsReview = (r) =>
     ['HIGH', 'CRISIS'].includes(r.risk_level) && !r.reviewed_at;
