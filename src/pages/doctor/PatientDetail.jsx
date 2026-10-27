@@ -61,6 +61,7 @@ const PatientDetail = () => {
   const [saving, setSaving] = useState(false);
   const [actionMsg, setActionMsg] = useState('');
   const [reviewingId, setReviewingId] = useState(null);
+  const [callMsg, setCallMsg] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -157,11 +158,25 @@ const PatientDetail = () => {
   const firstName = (patient?.name || '').split(' ')[0];
   const phone = patient?.phone;
   const wa = waNumber(phone);
-const doctorName = (user?.name || '').replace(/^dr\.?\s+/i, '').trim();
-const waMessage = encodeURIComponent(
-  `Hello ${firstName}, this is ${doctorName ? 'Dr. ' + doctorName : 'your doctor'} from HyperLink. ` +
-    `I'm checking in on your blood pressure. How are you feeling?`
-);
+  const doctorName = (user?.name || '').replace(/^dr\.?\s+/i, '').trim();
+  const waMessage = encodeURIComponent(
+    `Hello ${firstName}, this is ${doctorName ? 'Dr. ' + doctorName : 'your doctor'} from HyperLink. ` +
+      `I'm checking in on your blood pressure. How are you feeling?`
+  );
+
+  // tel: links only work on devices that can place calls. On a computer, copy the
+  // number instead so the doctor can dial it from their own phone.
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  const handleCall = (e) => {
+    if (isMobile) return; // on a phone, let the dialer open
+    e.preventDefault();
+    navigator.clipboard
+      ?.writeText(phone)
+      .then(() => setCallMsg('Number copied'))
+      .catch(() => setCallMsg(phone));
+    setTimeout(() => setCallMsg(''), 3000);
+  };
 
   const needsReview = (r) =>
     ['HIGH', 'CRISIS'].includes(r.risk_level) && !r.reviewed_at;
@@ -225,10 +240,11 @@ const waMessage = encodeURIComponent(
                 <div className="flex items-center gap-2">
                   <a
                     href={`tel:${phone}`}
+                    onClick={handleCall}
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-[#0B1739] hover:bg-gray-50"
                   >
                     <Phone className="w-4 h-4" />
-                    Call
+                    {callMsg || 'Call'}
                   </a>
                   {wa && (
                     <a
