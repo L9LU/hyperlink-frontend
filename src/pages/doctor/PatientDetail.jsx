@@ -93,11 +93,50 @@ const PatientDetail = () => {
 
   const latest = readings[readings.length - 1];
 
-  const chartData = readings.map((r) => ({
-    label: fmtDateTime(readingDate(r)),
-    systolic: r.systolic,
-    diastolic: r.diastolic,
-  }));
+  // The chart's horizontal axis is real time, so a long silence shows up as a long
+  // empty stretch instead of looking like one ordinary step between readings.
+  const chartData = readings
+    .map((r) => ({
+      t: readingDate(r)?.getTime(),
+      systolic: r.systolic,
+      diastolic: r.diastolic,
+    }))
+    .filter((d) => d.t != null);
+
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  // Where there are 3+ days with no readings, insert an empty point so the line
+  // breaks there. Otherwise it draws a straight "trend" across days nobody measured.
+  const plotData = [];
+  chartData.forEach((d, i) => {
+    if (i > 0 && d.t - chartData[i - 1].t >= 3 * DAY_MS) {
+      plotData.push({ t: Math.round((d.t + chartData[i - 1].t) / 2), systolic: null, diastolic: null });
+    }
+    plotData.push(d);
+  });
+
+  const tMin = chartData.length ? chartData[0].t : 0;
+  const tMax = chartData.length ? chartData[chartData.length - 1].t : 0;
+  const span = tMax - tMin;
+  const xDomain = span === 0 ? [tMin - 3600000, tMax + 3600000] : [tMin, tMax];
+  const xTicks =
+    span === 0 ? [tMin] : Array.from({ length: 5 }, (_, i) => Math.round(tMin + (span * i) / 4));
+
+  const fmtTick = (t) =>
+    span <= 2 * DAY_MS
+      ? fmtDateTime(new Date(t))
+      : new Date(t).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' });
+
+  // Longest stretch with no readings (3 days or more), shown under the chart.
+  let longestGap = null;
+  for (let i = 1; i < chartData.length; i++) {
+    const days = (chartData[i].t - chartData[i - 1].t) / DAY_MS;
+    if (days >= 3 && (!longestGap || days > longestGap.days)) {
+      longestGap = { days: Math.floor(days), from: chartData[i - 1].t, to: chartData[i].t };
+    }
+  }
+  const fmtDay = (t) =>
+    new Date(t).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' });
 
   const handleLogout = () => {
     logout();
@@ -358,15 +397,29 @@ const PatientDetail = () => {
                     <h3 className="font-semibold text-[#0B1739]">Blood Pressure Trend</h3>
                   </div>
                   <ResponsiveContainer width="100%" height={250}>
-                    <LineChart data={chartData}>
+                    <LineChart data={plotData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+                      <XAxis
+                        dataKey="t"
+                        type="number"
+                        scale="time"
+                        domain={xDomain}
+                        ticks={xTicks}
+                        tickFormatter={fmtTick}
+                        tick={{ fontSize: 12 }}
+                      />
                       <YAxis tick={{ fontSize: 12 }} />
-                      <Tooltip />
-                      <Line type="monotone" dataKey="systolic" stroke="#1A56DB" strokeWidth={2} />
-                      <Line type="monotone" dataKey="diastolic" stroke="#16A34A" strokeWidth={2} />
+                      <Tooltip labelFormatter={(t) => fmtDateTime(new Date(t))} />
+                      <Line type="linear" dataKey="systolic" stroke="#1A56DB" strokeWidth={2} dot={{ r: 3 }} />
+                      <Line type="linear" dataKey="diastolic" stroke="#16A34A" strokeWidth={2} dot={{ r: 3 }} />
                     </LineChart>
                   </ResponsiveContainer>
+                  {longestGap && (
+                    <p className="mt-3 text-sm text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+                      No readings between {fmtDay(longestGap.from)} and {fmtDay(longestGap.to)} (
+                      {longestGap.days} days).
+                    </p>
+                  )}
                 </div>
 
                 {/* Full reading history (newest first) */}
