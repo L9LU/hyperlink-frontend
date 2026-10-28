@@ -29,3 +29,42 @@ export const reviewReading = async ({ doctor_id, patient_id, reading_id, outcome
   });
   return response.data;
 };
+
+// ── Doctor-initiated linking: the doctor searches, sends a request, the patient accepts ──
+
+// Find a patient by their exact phone number or email.
+export const searchPatient = async (query) => {
+  const response = await apiClient.post('/doctor/search-patient', { query });
+  return response.data;
+};
+
+export const sendLinkRequest = async (patientId) => {
+  const response = await apiClient.post('/doctor/link-requests', { patient_id: patientId });
+  return response.data;
+};
+
+export const getDoctorLinkRequests = async () => {
+  const response = await apiClient.get('/doctor/link-requests');
+  return response.data;
+};
+
+export const cancelLinkRequest = async (requestId) => {
+  const response = await apiClient.post(`/doctor/link-requests/${requestId}/cancel`);
+  return response.data;
+};
+
+// Patient side (used by the patient screens)
+export const getPatientLinkRequests = async () => {
+  const response = await apiClient.get('/patient/link-requests');
+  return response.data;
+};
+
+export const respondToLinkRequest = async (requestId, accept) => {
+  const response = await apiClient.post(`/patient/link-requests/${requestId}/respond`, { accept });
+  return response.data;
+};
+
+export const unlinkDoctor = async () => {
+  const response = await apiClient.post('/patient/unlink-doctor');
+  return response.data;
+};
