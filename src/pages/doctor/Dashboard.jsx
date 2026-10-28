@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { getDoctorPatients } from '../../api/doctor.js';
-import { Users, LogOut, AlertCircle, PhoneCall, Clock } from 'lucide-react';
+import AddPatientPanel from './AddPatientPanel.jsx';
+import { Users, LogOut, AlertCircle, PhoneCall, Clock, UserPlus } from 'lucide-react';
 
 const FILTERS = [
   { key: 'all', label: 'All' },
@@ -20,24 +21,26 @@ const DoctorDashboard = () => {
   const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showAdd, setShowAdd] = useState(false);
+
+  const fetchPatients = useCallback(async () => {
+    try {
+      const data = await getDoctorPatients(user.user_id);
+      setPatients(Array.isArray(data) ? data : data.patients || []);
+      setSummary(Array.isArray(data) ? null : data.summary || null);
+      setError('');
+    } catch (err) {
+      setError('Could not load your patient list.');
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
 
   useEffect(() => {
-    const fetchPatients = async () => {
-      try {
-        const data = await getDoctorPatients(user.user_id);
-        setPatients(Array.isArray(data) ? data : data.patients || []);
-        setSummary(Array.isArray(data) ? null : data.summary || null);
-      } catch (err) {
-        setError('Could not load your patient list.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     if (user?.user_id) {
       fetchPatients();
     }
-  }, [user]);
+  }, [user, fetchPatients]);
 
   const handleLogout = () => {
     logout();
@@ -118,17 +121,32 @@ const DoctorDashboard = () => {
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-8">
-        <h1 className="text-2xl font-bold text-[#0B1739] mb-1">
-          Welcome back, Dr. {user?.name?.split(' ').slice(-1)[0] || ''}
-        </h1>
-        <p className="text-gray-500 mb-8">
-          Here's an overview of your patients.
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-2xl font-bold text-[#0B1739] mb-1">
+              Welcome back, Dr. {user?.name?.split(' ').slice(-1)[0] || ''}
+            </h1>
+            <p className="text-gray-500">Here's an overview of your patients.</p>
+          </div>
+          {!showAdd && (
+            <button
+              onClick={() => setShowAdd(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1A56DB] text-white text-sm font-medium hover:bg-[#1648b8]"
+            >
+              <UserPlus className="w-4 h-4" />
+              Add patient
+            </button>
+          )}
+        </div>
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3 mb-6">
             {error}
           </div>
+        )}
+
+        {showAdd && (
+          <AddPatientPanel onClose={() => setShowAdd(false)} onChanged={fetchPatients} />
         )}
 
         {loading ? (
@@ -143,8 +161,18 @@ const DoctorDashboard = () => {
               No patients linked yet
             </h2>
             <p className="text-gray-500 mb-6">
-              Once patients link their account to you, they'll appear here for monitoring.
+              Search for a patient by their phone number or email and send them a request.
+              Once they accept, they'll appear here for monitoring.
             </p>
+            {!showAdd && (
+              <button
+                onClick={() => setShowAdd(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1A56DB] text-white text-sm font-medium hover:bg-[#1648b8]"
+              >
+                <UserPlus className="w-4 h-4" />
+                Add patient
+              </button>
+            )}
           </div>
         ) : (
           <>
