@@ -33,8 +33,22 @@ const RegisterPatient = () => {
     e.preventDefault();
     setError('');
 
-    if (!form.firstName || !form.lastName || !form.email || !form.password) {
-      setError('Please fill in all required fields.');
+    if (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim() || !form.phone.trim() || !form.password) {
+      setError('Please fill in all required fields (marked with *).');
+      return;
+    }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email.trim())) {
+      setError('Enter a valid email address.');
+      return;
+    }
+    // Spaces, dashes and brackets are fine; we only count the digits.
+    const phoneDigits = form.phone.replace(/\D/g, '');
+    if (phoneDigits.length < 10 || phoneDigits.length > 15) {
+      setError('Enter a valid phone number, e.g. 0801 234 5678. Your doctor uses it to find and reach you.');
+      return;
+    }
+    if (form.password.length < 8) {
+      setError('Password must be at least 8 characters.');
       return;
     }
     if (form.password !== form.confirmPassword) {
@@ -53,8 +67,8 @@ const RegisterPatient = () => {
     try {
       const response = await registerUser({
         name: `${form.firstName} ${form.lastName}`,
-        email: form.email,
-        phone: form.phone,
+        email: form.email.trim(),
+        phone: form.phone.trim(),
         age: form.age,
         gender: form.gender,
         height_cm: form.heightCm ? Number(form.heightCm) : null,
@@ -80,7 +94,7 @@ const RegisterPatient = () => {
 
   return (
     <AuthLayout>
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} noValidate>
         <Link
           to="/choose-account-type"
           className="inline-flex items-center gap-1 text-gray-500 hover:text-gray-700 mb-6 text-sm"
@@ -105,7 +119,7 @@ const RegisterPatient = () => {
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium text-[#0B1739] mb-1">
-              First Name
+              First Name *
             </label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -120,7 +134,7 @@ const RegisterPatient = () => {
           </div>
           <div>
             <label className="block text-sm font-medium text-[#0B1739] mb-1">
-              Last Name
+              Last Name *
             </label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -136,7 +150,7 @@ const RegisterPatient = () => {
         </div>
 
         <label className="block text-sm font-medium text-[#0B1739] mb-1">
-          Email Address
+          Email Address *
         </label>
         <div className="relative mb-4">
           <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -150,7 +164,7 @@ const RegisterPatient = () => {
         </div>
 
         <label className="block text-sm font-medium text-[#0B1739] mb-1">
-          Phone Number
+          Phone Number *
         </label>
         <div className="relative mb-4">
           <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -158,10 +172,13 @@ const RegisterPatient = () => {
             type="tel"
             value={form.phone}
             onChange={handleChange('phone')}
-            placeholder="+234 123 456 7890"
+            placeholder="0801 234 5678"
             className="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A56DB]"
           />
         </div>
+        <p className="text-xs text-gray-400 -mt-2 mb-4">
+          Your doctor uses this to find you in HyperLink and to reach you if your readings need attention.
+        </p>
 
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div>
@@ -235,7 +252,7 @@ const RegisterPatient = () => {
         />
 
         <label className="block text-sm font-medium text-[#0B1739] mb-1">
-          Password
+          Password * <span className="text-gray-400 font-normal">(at least 8 characters)</span>
         </label>
         <div className="relative mb-4">
           <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -256,7 +273,7 @@ const RegisterPatient = () => {
         </div>
 
         <label className="block text-sm font-medium text-[#0B1739] mb-1">
-          Confirm Password
+          Confirm Password *
         </label>
         <div className="relative mb-6">
           <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
