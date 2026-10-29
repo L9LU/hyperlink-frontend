@@ -2,12 +2,12 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { getHistory, getPrediction } from '../../api/records.js';
-import { linkPatient } from '../../api/doctor.js';
+import LinkRequestsCard from './LinkRequestsCard.jsx';
 import { updateMeasurements } from '../../api/patient.js';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { Activity, Plus, LogOut, Heart, Shield, UserPlus, Ruler } from 'lucide-react';
+import { Activity, Plus, LogOut, Heart, Shield, Ruler } from 'lucide-react';
 
 const PatientDashboard = () => {
   const { user, logout, login } = useAuth();
@@ -20,11 +20,6 @@ const PatientDashboard = () => {
   const [risk, setRisk] = useState(null);
   const [riskLoading, setRiskLoading] = useState(false);
   const [riskError, setRiskError] = useState('');
-
-  const [doctorId, setDoctorId] = useState('');
-  const [linkLoading, setLinkLoading] = useState(false);
-  const [linkError, setLinkError] = useState('');
-  const [linkSuccess, setLinkSuccess] = useState(false);
 
   // Height/weight prompt — shown when a risk check fails because BMI is missing
   const [needsMeasurements, setNeedsMeasurements] = useState(false);
@@ -142,35 +137,6 @@ const PatientDashboard = () => {
     }
   };
 
-  const handleLinkDoctor = async (e) => {
-    e.preventDefault();
-    setLinkError('');
-    setLinkSuccess(false);
-
-    if (!doctorId) {
-      setLinkError('Please enter your doctor\'s ID.');
-      return;
-    }
-
-    setLinkLoading(true);
-    try {
-      await linkPatient({
-        patient_id: user.user_id,
-        doctor_id: doctorId,
-      });
-      setLinkSuccess(true);
-      setDoctorId('');
-    } catch (err) {
-      const message =
-        err.response?.data?.error ||
-        err.response?.data?.message ||
-        'Could not link to this doctor. Please check the ID and try again.';
-      setLinkError(message);
-    } finally {
-      setLinkLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Top nav */}
@@ -203,6 +169,12 @@ const PatientDashboard = () => {
             {error}
           </div>
         )}
+
+        {/* Doctor requests / linked doctor. Outside the readings branch so new
+            patients with no readings yet still see a request from their doctor. */}
+        <div className="mb-6">
+          <LinkRequestsCard />
+        </div>
 
         {loading ? (
           <p className="text-gray-400">Loading your data...</p>
@@ -360,47 +332,6 @@ const PatientDashboard = () => {
                   </button>
                 </div>
               )}
-            </div>
-
-            {/* Link to a doctor */}
-            <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6">
-              <div className="flex items-center gap-2 mb-4">
-                <UserPlus className="w-4 h-4 text-[#1A56DB]" />
-                <h3 className="font-semibold text-[#0B1739]">Connect with Your Doctor</h3>
-              </div>
-
-              {linkError && (
-                <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3 mb-4">
-                  {linkError}
-                </div>
-              )}
-
-              {linkSuccess && (
-                <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3 mb-4">
-                  Successfully linked! Your doctor can now see your readings.
-                </div>
-              )}
-
-              <p className="text-gray-500 text-sm mb-4">
-                Enter your doctor's ID to give them access to monitor your readings. Ask your doctor for their ID.
-              </p>
-
-              <form onSubmit={handleLinkDoctor} className="flex gap-3">
-                <input
-                  type="text"
-                  value={doctorId}
-                  onChange={(e) => setDoctorId(e.target.value)}
-                  placeholder="Doctor's ID"
-                  className="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A56DB]"
-                />
-                <button
-                  type="submit"
-                  disabled={linkLoading}
-                  className="bg-[#0B1739] text-white font-medium px-5 py-2.5 rounded-lg hover:bg-[#0B1739]/90 transition disabled:opacity-60 whitespace-nowrap"
-                >
-                  {linkLoading ? 'Linking...' : 'Link Doctor'}
-                </button>
-              </form>
             </div>
 
             {/* Recent readings list */}
