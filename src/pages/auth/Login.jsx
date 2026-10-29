@@ -19,8 +19,6 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-  const response = await loginUser({ email, password });
-login(response);
 
     if (!email || !password) {
       setError('Please enter both email and password.');
@@ -29,18 +27,18 @@ login(response);
 
     setLoading(true);
     try {
- const response = await loginUser({ email, password });
-login(response);
+      const response = await loginUser({ email: email.trim(), password });
+      login(response);
 
-if (response.role === 'doctor' || response.role === 'pharmacist') {
-  if (response.verified === false) {
-    navigate('/pending-verification');
-  } else {
-    navigate(response.role === 'doctor' ? '/doctor/dashboard' : '/pharmacist/dashboard');
-  }
-} else {
-  navigate('/patient/dashboard');
-}
+      if (response.role === 'doctor' || response.role === 'pharmacist') {
+        if (response.verified === false) {
+          navigate('/pending-verification');
+        } else {
+          navigate(response.role === 'doctor' ? '/doctor/dashboard' : '/pharmacist/dashboard');
+        }
+      } else {
+        navigate('/patient/dashboard');
+      }
     } catch (err) {
       const message =
         err.response?.data?.error ||
