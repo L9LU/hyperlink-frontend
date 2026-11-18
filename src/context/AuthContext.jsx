@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { readUser, writeUser, clearUser } from './authStorage.js';
 
 const AuthContext = createContext();
 
@@ -9,21 +10,20 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedUser = sessionStorage.getItem('hyperlink_user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
+    setUser(readUser());
     setLoading(false);
   }, []);
 
-  const login = (userData) => {
+  // remember: true = stay signed in on this device, false = until the tab closes.
+  // Leave it out (e.g. when updating the profile) to keep the current choice.
+  const login = (userData, remember) => {
     setUser(userData);
-    sessionStorage.setItem('hyperlink_user', JSON.stringify(userData));
+    writeUser(userData, remember);
   };
 
   const logout = () => {
     setUser(null);
-    sessionStorage.removeItem('hyperlink_user');
+    clearUser();
   };
 
   const value = { user, login, logout, loading };
