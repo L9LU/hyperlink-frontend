@@ -3,6 +3,8 @@ import { useNavigate, Link } from 'react-router-dom';
 import AuthLayout from '../../components/AuthLayout.jsx';
 import { registerUser } from '../../api/auth.js';
 import { LANGUAGES, DEFAULT_LANGUAGE } from '../../constants/languages.js';
+import { CONSENT_VERSION } from '../../constants/consent.js';
+import ConsentModal from '../../components/ConsentModal.jsx';
 import { User, Mail, Phone, Lock, Eye, EyeOff, ChevronLeft } from 'lucide-react';
 
 const RegisterPatient = () => {
@@ -25,6 +27,8 @@ const RegisterPatient = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [consented, setConsented] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
 
   const handleChange = (field) => (e) => {
     setForm({ ...form, [field]: e.target.value });
@@ -57,6 +61,11 @@ const RegisterPatient = () => {
       return;
     }
 
+    if (!consented) {
+      setError('Please read and accept the privacy and consent terms.');
+      return;
+    }
+
     // Calculate BMI from height/weight if both are provided
     let bmi = null;
     if (form.heightCm && form.weightKg) {
@@ -71,6 +80,7 @@ const RegisterPatient = () => {
         email: form.email.trim(),
         phone: form.phone.trim(),
         language: form.language,
+        consent_version: CONSENT_VERSION,
         age: form.age,
         gender: form.gender,
         height_cm: form.heightCm ? Number(form.heightCm) : null,
@@ -301,6 +311,26 @@ const RegisterPatient = () => {
           </button>
         </div>
 
+        <label className="flex items-start gap-3 text-sm text-[#0B1739] mb-4">
+          <input
+            type="checkbox"
+            checked={consented}
+            onChange={(e) => setConsented(e.target.checked)}
+            className="mt-1 w-4 h-4"
+          />
+          <span>
+            I have read the{' '}
+            <button
+              type="button"
+              onClick={() => setShowTerms(true)}
+              className="text-[#1A56DB] underline"
+            >
+              privacy and consent terms
+            </button>{' '}
+            and I agree.
+          </span>
+        </label>
+
         <button
           type="submit"
           disabled={loading}
@@ -309,6 +339,7 @@ const RegisterPatient = () => {
           {loading ? 'Creating Account...' : 'Create Account'}
         </button>
       </form>
+      {showTerms && <ConsentModal onClose={() => setShowTerms(false)} />}
     </AuthLayout>
   );
 };
