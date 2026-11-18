@@ -1,363 +1,347 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext.jsx';
-import { getHistory, getPrediction } from '../../api/records.js';
-import LinkRequestsCard from './LinkRequestsCard.jsx';
-import { updateMeasurements } from '../../api/patient.js';
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-} from 'recharts';
-import { Activity, Plus, LogOut, Heart, Shield, Ruler } from 'lucide-react';
+import { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import AuthLayout from '../../components/AuthLayout.jsx';
+import { registerUser } from '../../api/auth.js';
+import { LANGUAGES, DEFAULT_LANGUAGE } from '../../constants/languages.js';
+import { CONSENT_VERSION } from '../../constants/consent.js';
+import ConsentModal from '../../components/ConsentModal.jsx';
+import { User, Mail, Phone, Lock, Eye, EyeOff, ChevronLeft } from 'lucide-react';
 
-const PatientDashboard = () => {
-  const { user, logout, login } = useAuth();
+const RegisterPatient = () => {
   const navigate = useNavigate();
 
-  const [readings, setReadings] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    language: DEFAULT_LANGUAGE,
+    age: '',
+    gender: '',
+    heightCm: '',
+    weightKg: '',
+    password: '',
+    confirmPassword: '',
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [consented, setConsented] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
 
-  const [risk, setRisk] = useState(null);
-  const [riskLoading, setRiskLoading] = useState(false);
-  const [riskError, setRiskError] = useState('');
-
-  // Height/weight prompt — shown when a risk check fails because BMI is missing
-  const [needsMeasurements, setNeedsMeasurements] = useState(false);
-  const [heightCm, setHeightCm] = useState('');
-  const [weightKg, setWeightKg] = useState('');
-  const [measurementsLoading, setMeasurementsLoading] = useState(false);
-  const [measurementsError, setMeasurementsError] = useState('');
-
-  useEffect(() => {
-    const fetchHistory = async () => {
-      try {
-        const data = await getHistory(user.user_id);
-        setReadings(Array.isArray(data) ? data : data.readings || []);
-      } catch (err) {
-        setError('Could not load your reading history.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (user?.user_id) {
-      fetchHistory();
-    }
-  }, [user]);
-
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  const handleChange = (field) => (e) => {
+    setForm({ ...form, [field]: e.target.value });
   };
 
-  const latest = readings[readings.length - 1];
-
-  const chartData = readings.map((r) => ({
-    date: r.date || r.created_at || '',
-    systolic: r.systolic,
-    diastolic: r.diastolic,
-  }));
-
-  const runRiskCheck = async (patientData) => {
-    const result = await getPrediction({
-      patient_id: patientData.user_id,
-      age: patientData.age,
-      bmi: patientData.bmi,
-      family_history: patientData.family_history,
-      exercise_level: patientData.exercise_level,
-      smoking_status: patientData.smoking_status,
-      bp_history: patientData.bp_history,
-      systolic: latest.systolic,
-      diastolic: latest.diastolic,
-      pulse: latest.pulse,
-    });
-    setRisk(result);
-  };
-
-  const handleCheckRisk = async () => {
-    setRiskError('');
-    setRiskLoading(true);
-    try {
-      await runRiskCheck(user);
-    } catch (err) {
-      const message =
-        err.response?.data?.error ||
-        err.response?.data?.message ||
-        'Could not calculate risk score.';
-
-      // If BMI is the specific problem, prompt for height/weight instead
-      // of just showing a dead-end error message.
-      if (message.toLowerCase().includes('bmi')) {
-        setNeedsMeasurements(true);
-      } else {
-        setRiskError(message);
-      }
-    } finally {
-      setRiskLoading(false);
-    }
-  };
-
-  const handleSaveMeasurements = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setMeasurementsError('');
+    setError('');
 
-    if (!heightCm || !weightKg) {
-      setMeasurementsError('Please enter both height and weight.');
+    if (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim() || !form.phone.trim() || !form.password) {
+      setError('Please fill in all required fields (marked with *).');
+      return;
+    }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email.trim())) {
+      setError('Enter a valid email address.');
+      return;
+    }
+    // Spaces, dashes and brackets are fine; we only count the digits.
+    const phoneDigits = form.phone.replace(/\D/g, '');
+    if (phoneDigits.length < 10 || phoneDigits.length > 15) {
+      setError('Enter a valid phone number, e.g. 0801 234 5678. Your doctor uses it to find and reach you.');
+      return;
+    }
+    if (form.password.length < 8) {
+      setError('Password must be at least 8 characters.');
+      return;
+    }
+    if (form.password !== form.confirmPassword) {
+      setError('Passwords do not match.');
       return;
     }
 
-    setMeasurementsLoading(true);
+    if (!consented) {
+      setError('Please read and accept the privacy and consent terms.');
+      return;
+    }
+
+    // Calculate BMI from height/weight if both are provided
+    let bmi = null;
+    if (form.heightCm && form.weightKg) {
+      const heightM = Number(form.heightCm) / 100;
+      bmi = Math.round((Number(form.weightKg) / (heightM * heightM)) * 10) / 10;
+    }
+
+    setLoading(true);
     try {
-      const result = await updateMeasurements({
-        patient_id: user.user_id,
-        height_cm: Number(heightCm),
-        weight_kg: Number(weightKg),
+      const response = await registerUser({
+        name: `${form.firstName} ${form.lastName}`,
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        language: form.language,
+        consent_version: CONSENT_VERSION,
+        age: form.age,
+        gender: form.gender,
+        height_cm: form.heightCm ? Number(form.heightCm) : null,
+        weight_kg: form.weightKg ? Number(form.weightKg) : null,
+        bmi: bmi,
+        password: form.password,
+        role: 'patient',
       });
 
-      // Update local user context so we don't need a fresh login to see the new BMI
-      const updatedUser = { ...user, bmi: result.bmi, height_cm: Number(heightCm), weight_kg: Number(weightKg) };
-      login(updatedUser);
-
-      setNeedsMeasurements(false);
-      setHeightCm('');
-      setWeightKg('');
-
-      // Now retry the risk check with the freshly-saved BMI
-      setRiskLoading(true);
-      await runRiskCheck(updatedUser);
+      // Registration successful — send them to login to sign in with new credentials
+      navigate('/login');
     } catch (err) {
       const message =
         err.response?.data?.error ||
         err.response?.data?.message ||
-        'Could not save your measurements. Please try again.';
-      setMeasurementsError(message);
+        'Registration failed. Please try again.';
+      setError(message);
     } finally {
-      setMeasurementsLoading(false);
-      setRiskLoading(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Top nav */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-[#1A56DB] flex items-center justify-center">
-            <span className="text-white text-sm font-bold">H</span>
-          </div>
-          <span className="text-lg font-semibold text-[#0B1739]">HyperLink</span>
-        </div>
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700"
+    <AuthLayout>
+      <form onSubmit={handleSubmit} noValidate>
+        <Link
+          to="/choose-account-type"
+          className="inline-flex items-center gap-1 text-gray-500 hover:text-gray-700 mb-6 text-sm"
         >
-          <LogOut className="w-4 h-4" />
-          Sign Out
-        </button>
-      </header>
+          <ChevronLeft className="w-4 h-4" />
+          Back
+        </Link>
 
-      <main className="max-w-5xl mx-auto px-6 py-8">
-        <h1 className="text-2xl font-bold text-[#0B1739] mb-1">
-          Welcome back, {user?.name?.split(' ')[0] || 'there'}
+        <h1 className="text-3xl font-bold text-[#0B1739] mb-1">
+          Create Patient Account
         </h1>
-        <p className="text-gray-500 mb-8">
-          Here's an overview of your blood pressure health.
+        <p className="text-gray-500 mb-6">
+          Let's get you started with your health profile.
         </p>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3 mb-6">
+          <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3 mb-4">
             {error}
           </div>
         )}
 
-        {/* Doctor requests / linked doctor. Outside the readings branch so new
-            patients with no readings yet still see a request from their doctor. */}
-        <div className="mb-6">
-          <LinkRequestsCard />
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium text-[#0B1739] mb-1">
+              First Name *
+            </label>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={form.firstName}
+                onChange={handleChange('firstName')}
+                placeholder="Akintunde"
+                className="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A56DB]"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[#0B1739] mb-1">
+              Last Name *
+            </label>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={form.lastName}
+                onChange={handleChange('lastName')}
+                placeholder="Tijani"
+                className="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A56DB]"
+              />
+            </div>
+          </div>
         </div>
 
-        {loading ? (
-          <p className="text-gray-400">Loading your data...</p>
-        ) : readings.length === 0 ? (
-          /* Empty state */
-          <div className="bg-white border border-gray-200 rounded-xl p-10 text-center mb-6">
-            <div className="w-14 h-14 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-4">
-              <Heart className="w-6 h-6 text-[#1A56DB]" />
-            </div>
-            <h2 className="text-lg font-semibold text-[#0B1739] mb-1">
-              No readings yet
-            </h2>
-            <p className="text-gray-500 mb-6">
-              Log your first blood pressure reading to start tracking your health.
-            </p>
-            <button
-              onClick={() => navigate('/patient/log-reading')}
-              className="inline-flex items-center gap-2 bg-[#0B1739] text-white font-medium px-6 py-3 rounded-lg hover:bg-[#0B1739]/90 transition"
-            >
-              <Plus className="w-4 h-4" />
-              Log New Reading
-            </button>
+        <label className="block text-sm font-medium text-[#0B1739] mb-1">
+          Email Address *
+        </label>
+        <div className="relative mb-4">
+          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="email"
+            value={form.email}
+            onChange={handleChange('email')}
+            placeholder="akintunde@gmail.com"
+            className="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A56DB]"
+          />
+        </div>
+
+        <label className="block text-sm font-medium text-[#0B1739] mb-1">
+          Phone Number *
+        </label>
+        <div className="relative mb-4">
+          <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="tel"
+            value={form.phone}
+            onChange={handleChange('phone')}
+            placeholder="0801 234 5678"
+            className="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A56DB]"
+          />
+        </div>
+        <p className="text-xs text-gray-400 -mt-2 mb-4">
+          Your doctor uses this to find you in HyperLink and to reach you if your readings need attention.
+        </p>
+
+        <label className="block text-sm font-medium text-[#0B1739] mb-1">
+          Preferred Language *
+        </label>
+        <select
+          value={form.language}
+          onChange={handleChange('language')}
+          className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A56DB] text-gray-700"
+        >
+          {LANGUAGES.map((l) => (
+            <option key={l.code} value={l.code}>
+              {l.label}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-gray-400 mt-1 mb-4">
+          The language your care assistant will use with you. You can change it any time.
+        </p>
+
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium text-[#0B1739] mb-1">
+              Age
+            </label>
+            <input
+              type="number"
+              value={form.age}
+              onChange={handleChange('age')}
+              placeholder="45"
+              className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A56DB]"
+            />
           </div>
-        ) : (
-          <>
-            {/* Latest reading + action */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <div className="bg-white border border-gray-200 rounded-xl p-5">
-                <p className="text-sm text-gray-500 mb-1">Systolic</p>
-                <p className="text-2xl font-bold text-[#1A56DB]">
-                  {latest?.systolic ?? '--'}
-                </p>
-              </div>
-              <div className="bg-white border border-gray-200 rounded-xl p-5">
-                <p className="text-sm text-gray-500 mb-1">Diastolic</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {latest?.diastolic ?? '--'}
-                </p>
-              </div>
-              <div className="bg-white border border-gray-200 rounded-xl p-5">
-                <p className="text-sm text-gray-500 mb-1">Pulse</p>
-                <p className="text-2xl font-bold text-orange-500">
-                  {latest?.pulse ?? '--'}
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={() => navigate('/patient/log-reading')}
-              className="inline-flex items-center gap-2 bg-[#0B1739] text-white font-medium px-5 py-2.5 rounded-lg hover:bg-[#0B1739]/90 transition mb-8"
+          <div>
+            <label className="block text-sm font-medium text-[#0B1739] mb-1">
+              Gender
+            </label>
+            <select
+              value={form.gender}
+              onChange={handleChange('gender')}
+              className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A56DB] text-gray-700"
             >
-              <Plus className="w-4 h-4" />
-              Log New Reading
-            </button>
+              <option value="">Select</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
 
-            {/* Trend chart */}
-            <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Activity className="w-4 h-4 text-[#1A56DB]" />
-                <h3 className="font-semibold text-[#0B1739]">Blood Pressure Trend</h3>
-              </div>
-              <ResponsiveContainer width="100%" height={250}>
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="systolic" stroke="#1A56DB" strokeWidth={2} />
-                  <Line type="monotone" dataKey="diastolic" stroke="#16A34A" strokeWidth={2} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium text-[#0B1739] mb-1">
+              Height (cm)
+            </label>
+            <input
+              type="number"
+              value={form.heightCm}
+              onChange={handleChange('heightCm')}
+              placeholder="170"
+              className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A56DB]"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[#0B1739] mb-1">
+              Weight (kg)
+            </label>
+            <input
+              type="number"
+              value={form.weightKg}
+              onChange={handleChange('weightKg')}
+              placeholder="68"
+              className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A56DB]"
+            />
+          </div>
+        </div>
+        <p className="text-xs text-gray-400 -mt-2 mb-4">
+          Used to calculate your BMI for risk assessment. You can add this later if you skip it now.
+        </p>
 
-            {/* Risk prediction */}
-            <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Shield className="w-4 h-4 text-[#1A56DB]" />
-                <h3 className="font-semibold text-[#0B1739]">Risk Assessment</h3>
-              </div>
+        <label className="block text-sm font-medium text-[#0B1739] mb-1">
+          Password * <span className="text-gray-400 font-normal">(at least 8 characters)</span>
+        </label>
+        <div className="relative mb-4">
+          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type={showPassword ? 'text' : 'password'}
+            value={form.password}
+            onChange={handleChange('password')}
+            placeholder="••••••••"
+            className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A56DB]"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+          >
+            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
+        </div>
 
-              {riskError && (
-                <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3 mb-4">
-                  {riskError}
-                </div>
-              )}
+        <label className="block text-sm font-medium text-[#0B1739] mb-1">
+          Confirm Password *
+        </label>
+        <div className="relative mb-6">
+          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type={showConfirmPassword ? 'text' : 'password'}
+            value={form.confirmPassword}
+            onChange={handleChange('confirmPassword')}
+            placeholder="••••••••"
+            className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A56DB]"
+          />
+          <button
+            type="button"
+            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+          >
+            {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
+        </div>
 
-              {needsMeasurements ? (
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Ruler className="w-4 h-4 text-[#1A56DB]" />
-                    <p className="text-sm font-medium text-[#0B1739]">
-                      We need your height and weight to calculate your risk score.
-                    </p>
-                  </div>
+        <label className="flex items-start gap-3 text-sm text-[#0B1739] mb-4">
+          <input
+            type="checkbox"
+            checked={consented}
+            onChange={(e) => setConsented(e.target.checked)}
+            className="mt-1 w-4 h-4"
+          />
+          <span>
+            I have read the{' '}
+            <button
+              type="button"
+              onClick={() => setShowTerms(true)}
+              className="text-[#1A56DB] underline"
+            >
+              privacy and consent terms
+            </button>{' '}
+            and I agree.
+          </span>
+        </label>
 
-                  {measurementsError && (
-                    <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3 mb-4">
-                      {measurementsError}
-                    </div>
-                  )}
-
-                  <form onSubmit={handleSaveMeasurements} className="flex flex-col sm:flex-row gap-3">
-                    <input
-                      type="number"
-                      value={heightCm}
-                      onChange={(e) => setHeightCm(e.target.value)}
-                      placeholder="Height (cm)"
-                      className="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A56DB]"
-                    />
-                    <input
-                      type="number"
-                      value={weightKg}
-                      onChange={(e) => setWeightKg(e.target.value)}
-                      placeholder="Weight (kg)"
-                      className="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A56DB]"
-                    />
-                    <button
-                      type="submit"
-                      disabled={measurementsLoading}
-                      className="bg-[#0B1739] text-white font-medium px-5 py-2.5 rounded-lg hover:bg-[#0B1739]/90 transition disabled:opacity-60 whitespace-nowrap"
-                    >
-                      {measurementsLoading ? 'Saving...' : 'Save & Check Risk'}
-                    </button>
-                  </form>
-                </div>
-              ) : risk ? (
-                <div>
-                  <p className="text-sm text-gray-500 mb-1">Risk Score</p>
-                  <p className="text-3xl font-bold text-[#0B1739] mb-2">
-                    {risk.risk_score ?? risk.score ?? '--'}%
-                  </p>
-                  <span
-                    className={`inline-block text-xs font-medium px-3 py-1 rounded-full ${
-                      (risk.risk_level ?? risk.level) === 'HIGH'
-                        ? 'bg-red-50 text-red-600'
-                        : (risk.risk_level ?? risk.level) === 'MODERATE'
-                        ? 'bg-orange-50 text-orange-600'
-                        : 'bg-green-50 text-green-600'
-                    }`}
-                  >
-                    {risk.risk_level ?? risk.level ?? 'Unknown'}
-                  </span>
-                </div>
-              ) : (
-                <div>
-                  <p className="text-gray-500 text-sm mb-4">
-                    Get an ML-powered assessment of your hypertension risk based on your latest reading.
-                  </p>
-                  <button
-                    onClick={handleCheckRisk}
-                    disabled={riskLoading}
-                    className="inline-flex items-center gap-2 bg-[#1A56DB] text-white font-medium px-5 py-2.5 rounded-lg hover:bg-[#1A56DB]/90 transition disabled:opacity-60"
-                  >
-                    {riskLoading ? 'Calculating...' : 'Check My Risk'}
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Recent readings list */}
-            <div className="bg-white border border-gray-200 rounded-xl p-6">
-              <h3 className="font-semibold text-[#0B1739] mb-4">Recent Readings</h3>
-              <div className="space-y-3">
-                {[...readings].reverse().slice(0, 5).map((r, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0"
-                  >
-                    <span className="text-sm text-gray-500">
-                      {r.date || r.created_at || 'Unknown date'}
-                    </span>
-                    <span className="text-sm font-medium text-[#0B1739]">
-                      {r.systolic}/{r.diastolic} mmHg
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
-      </main>
-    </div>
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full bg-[#0B1739] text-white font-medium py-3 rounded-lg hover:bg-[#0B1739]/90 transition disabled:opacity-60"
+        >
+          {loading ? 'Creating Account...' : 'Create Account'}
+        </button>
+      </form>
+      {showTerms && <ConsentModal onClose={() => setShowTerms(false)} />}
+    </AuthLayout>
   );
 };
 
-export default PatientDashboard;
+export default RegisterPatient;
