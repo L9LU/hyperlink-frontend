@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import AuthLayout from '../../components/AuthLayout.jsx';
 import { registerUser } from '../../api/auth.js';
+import { LANGUAGES, DEFAULT_LANGUAGE } from '../../constants/languages.js';
 import { User, Mail, Phone, Lock, Eye, EyeOff, ChevronLeft } from 'lucide-react';
 
 const RegisterPatient = () => {
@@ -12,11 +13,11 @@ const RegisterPatient = () => {
     lastName: '',
     email: '',
     phone: '',
+    language: DEFAULT_LANGUAGE,
     age: '',
     gender: '',
     heightCm: '',
     weightKg: '',
-    hospital: '',
     password: '',
     confirmPassword: '',
   });
@@ -69,12 +70,12 @@ const RegisterPatient = () => {
         name: `${form.firstName} ${form.lastName}`,
         email: form.email.trim(),
         phone: form.phone.trim(),
+        language: form.language,
         age: form.age,
         gender: form.gender,
         height_cm: form.heightCm ? Number(form.heightCm) : null,
         weight_kg: form.weightKg ? Number(form.weightKg) : null,
         bmi: bmi,
-        hospital: form.hospital,
         password: form.password,
         role: 'patient',
       });
@@ -180,6 +181,24 @@ const RegisterPatient = () => {
           Your doctor uses this to find you in HyperLink and to reach you if your readings need attention.
         </p>
 
+        <label className="block text-sm font-medium text-[#0B1739] mb-1">
+          Preferred Language *
+        </label>
+        <select
+          value={form.language}
+          onChange={handleChange('language')}
+          className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A56DB] text-gray-700"
+        >
+          {LANGUAGES.map((l) => (
+            <option key={l.code} value={l.code}>
+              {l.label}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-gray-400 mt-1 mb-4">
+          The language your care assistant will use with you. You can change it any time.
+        </p>
+
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium text-[#0B1739] mb-1">
@@ -239,17 +258,6 @@ const RegisterPatient = () => {
         <p className="text-xs text-gray-400 -mt-2 mb-4">
           Used to calculate your BMI for risk assessment. You can add this later if you skip it now.
         </p>
-
-        <label className="block text-sm font-medium text-[#0B1739] mb-1">
-          Hospital
-        </label>
-        <input
-          type="text"
-          value={form.hospital}
-          onChange={handleChange('hospital')}
-          placeholder="Select your hospital"
-          className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1A56DB] mb-4"
-        />
 
         <label className="block text-sm font-medium text-[#0B1739] mb-1">
           Password * <span className="text-gray-400 font-normal">(at least 8 characters)</span>
