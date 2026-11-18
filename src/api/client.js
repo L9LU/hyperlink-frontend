@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { readUser, clearUser } from '../context/authStorage.js';
 
 const apiClient = axios.create({
   baseURL: 'https://hyperlink-backend-up65.onrender.com',
@@ -7,17 +8,12 @@ const apiClient = axios.create({
   },
 });
 
-// Attach the login token to every request. AuthContext already stores the whole
-// login response (which now includes `token`) in sessionStorage.
+// Attach the login token to every request. AuthContext stores the whole login
+// response (which includes `token`); authStorage knows where it is kept.
 apiClient.interceptors.request.use((config) => {
-  try {
-    const stored = sessionStorage.getItem('hyperlink_user');
-    const token = stored ? JSON.parse(stored).token : null;
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-  } catch {
-    // unreadable storage: send the request without a token
+  const token = readUser()?.token;
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
@@ -29,7 +25,7 @@ apiClient.interceptors.response.use(
   (error) => {
     const url = error.config?.url || '';
     if (error.response?.status === 401 && !url.includes('/auth/')) {
-      sessionStorage.removeItem('hyperlink_user');
+      clearUser();
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
